@@ -23,8 +23,6 @@ import {
 
 type Auth = Awaited<ReturnType<typeof auth>>;
 
-export type { FeatureName };
-
 export interface UploadValidationResult {
   allowed: boolean;
   reason?: "file_size" | "duration" | "project_limit";
