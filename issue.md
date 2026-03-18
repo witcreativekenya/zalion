@@ -9,7 +9,7 @@
  * https://clerk.com/docs/nextjs/guides/billing/for-b2c
  */
 
-import { auth } from "@clerk/nextjs/server";
+import type { Auth } from "@clerk/nextjs/server";
 import { convex } from "@/lib/convex-client";
 import { api } from "@/convex/_generated/api";
 import {
@@ -20,10 +20,6 @@ import {
   type PlanLimits,
   type PlanName,
 } from "./tier-config";
-
-type Auth = Awaited<ReturnType<typeof auth>>;
-
-export type { FeatureName };
 
 export interface UploadValidationResult {
   allowed: boolean;
@@ -158,4 +154,3 @@ export function getMinimumPlanForFeature(feature: FeatureName): PlanName {
   if (PLAN_FEATURES.pro.includes(feature)) return "pro";
   return "ultra";
 }
-

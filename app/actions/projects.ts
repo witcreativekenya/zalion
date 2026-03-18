@@ -19,7 +19,6 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { del } from "@vercel/blob";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { inngest } from "@/inngest/client";
@@ -64,7 +63,7 @@ export async function validateUploadAction(input: {
 }
 
 interface CreateProjectInput {
-  fileUrl: string; // Vercel Blob URL
+  storageId: string; // Convex storage ID
   fileName: string; // Original filename
   fileSize: number; // Bytes
   mimeType: string; // MIME type
@@ -109,10 +108,10 @@ export async function createProjectAction(input: CreateProjectInput) {
       throw new Error("Unauthorized");
     }
 
-    const { fileUrl, fileName, fileSize, mimeType, fileDuration } = input;
+    const { storageId, fileName, fileSize, mimeType, fileDuration } = input;
 
     // Validate required fields
-    if (!fileUrl || !fileName) {
+    if (!storageId || !fileName) {
       throw new Error("Missing required fields");
     }
 
@@ -141,11 +140,10 @@ export async function createProjectAction(input: CreateProjectInput) {
     // Extract file extension for display
     const fileExtension = fileName.split(".").pop() || "unknown";
 
-    // Create project in Convex database
-    // Status starts as "uploaded", will be updated by Inngest
-    const projectId = await convex.mutation(api.projects.createProject, {
+    // Create project in Convex — resolves public URL from storageId internally
+    const { projectId, inputUrl } = await convex.mutation(api.projects.createProject, {
       userId,
-      inputUrl: fileUrl,
+      storageId: storageId as Id<"_storage">,
       fileName,
       fileSize: fileSize || 0,
       fileDuration,
@@ -154,14 +152,13 @@ export async function createProjectAction(input: CreateProjectInput) {
     });
 
     // Trigger Inngest workflow asynchronously with user's current plan
-    // Event name "podcast/uploaded" matches workflow trigger
     await inngest.send({
       name: "podcast/uploaded",
       data: {
-        projectId, // Convex project ID
+        projectId,
         userId,
-        plan, // Pass user's current plan for conditional generation
-        fileUrl, // URL to audio file in Blob
+        plan,
+        fileUrl: inputUrl, // Public Convex storage URL for AssemblyAI
         fileName,
         fileSize: fileSize || 0,
         mimeType: mimeType,
@@ -200,20 +197,11 @@ export async function deleteProjectAction(projectId: Id<"projects">) {
       throw new Error("Unauthorized");
     }
 
-    // Delete from Convex (validates ownership, returns inputUrl)
-    const result = await convex.mutation(api.projects.deleteProject, {
+    // Delete from Convex (validates ownership, deletes file from storage)
+    await convex.mutation(api.projects.deleteProject, {
       projectId,
       userId,
     });
-
-    // Delete file from Vercel Blob
-    // If this fails, we've already deleted from DB - log but don't throw
-    try {
-      await del(result.inputUrl);
-    } catch (blobError) {
-      console.error("Failed to delete file from Blob storage:", blobError);
-      // Don't throw - project is already deleted from database
-    }
 
     return { success: true };
   } catch (error) {

@@ -21,14 +21,13 @@
  */
 import type { step as InngestStep } from "inngest";
 import type OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
-import { openai } from "../../lib/openai-client";
+import { mistral } from "../../lib/mistral-client";
 import { type Summary, summarySchema } from "../../schemas/ai-outputs";
 import type { TranscriptWithExtras } from "../../types/assemblyai";
 
-// System prompt defines GPT's role and expertise
+// System prompt defines the model's role and expertise
 const SUMMARY_SYSTEM_PROMPT =
-  "You are an expert podcast content analyst and marketing strategist. Your summaries are engaging, insightful, and highlight the most valuable takeaways for listeners.";
+  'You are an expert podcast content analyst and marketing strategist. Your summaries are engaging, insightful, and highlight the most valuable takeaways for listeners. You MUST respond with valid JSON only, matching this exact structure: {"full":"string (200-300 words)","bullets":["string"],"insights":["string"],"tldr":"string"}';
 
 /**
  * Builds the user prompt with transcript context and detailed instructions
@@ -97,26 +96,25 @@ export async function generateSummary(
   step: typeof InngestStep,
   transcript: TranscriptWithExtras
 ): Promise<Summary> {
-  console.log("Generating podcast summary with GPT-4");
+  console.log("Generating podcast summary with Mistral");
 
   try {
-    // Bind OpenAI method to preserve `this` context (required for step.ai.wrap)
-    const createCompletion = openai.chat.completions.create.bind(
-      openai.chat.completions
+    // Bind method to preserve `this` context (required for step.ai.wrap)
+    const createCompletion = mistral.chat.completions.create.bind(
+      mistral.chat.completions
     );
 
-    // Call OpenAI with Structured Outputs for type-safe response
+    // Call Mistral with JSON mode for structured response
     const response = (await step.ai.wrap(
-      "generate-summary-with-gpt",
+      "generate-summary-with-mistral",
       createCompletion,
       {
-        model: "gpt-5-mini", // Fast and cost-effective model
+        model: "mistral-large-latest",
         messages: [
           { role: "system", content: SUMMARY_SYSTEM_PROMPT },
           { role: "user", content: buildSummaryPrompt(transcript) },
         ],
-        // zodResponseFormat ensures response matches summarySchema
-        response_format: zodResponseFormat(summarySchema, "summary"),
+        response_format: { type: "json_object" },
       }
     )) as OpenAI.Chat.Completions.ChatCompletion;
 
@@ -134,11 +132,11 @@ export async function generateSummary(
 
     return summary;
   } catch (error) {
-    console.error("GPT summary generation error:", error);
+    console.error("Mistral summary generation error:", error);
 
     // Graceful degradation: return error message but allow workflow to continue
     return {
-      full: "⚠️ Error generating summary with GPT-4. Please check logs or try again.",
+      full: "⚠️ Error generating summary with Mistral. Please check logs or try again.",
       bullets: ["Summary generation failed - see full transcript"],
       insights: ["Error occurred during AI generation"],
       tldr: "Summary generation failed",

@@ -19,14 +19,13 @@
  */
 import type { step as InngestStep } from "inngest";
 import type OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
-import { openai } from "../../lib/openai-client";
+import { mistral } from "../../lib/mistral-client";
 import { type Hashtags, hashtagsSchema } from "../../schemas/ai-outputs";
 import type { TranscriptWithExtras } from "../../types/assemblyai";
 
-// System prompt establishes GPT's knowledge of hashtag strategies
+// System prompt establishes the model's knowledge of hashtag strategies
 const HASHTAGS_SYSTEM_PROMPT =
-  "You are a social media growth expert who understands platform algorithms and trending hashtag strategies. You create hashtag sets that maximize reach and engagement.";
+  'You are a social media growth expert who understands platform algorithms and trending hashtag strategies. You create hashtag sets that maximize reach and engagement. You MUST respond with valid JSON only, matching this exact structure: {"youtube":["string"],"instagram":["string"],"tiktok":["string"],"linkedin":["string"],"twitter":["string"]}';
 
 /**
  * Builds prompt with episode topics and platform-specific guidelines
@@ -103,25 +102,25 @@ export async function generateHashtags(
   step: typeof InngestStep,
   transcript: TranscriptWithExtras
 ): Promise<Hashtags> {
-  console.log("Generating hashtags with GPT");
+  console.log("Generating hashtags with Mistral");
 
   try {
-    // Bind OpenAI method to preserve `this` context for step.ai.wrap
-    const createCompletion = openai.chat.completions.create.bind(
-      openai.chat.completions
+    // Bind method to preserve `this` context for step.ai.wrap
+    const createCompletion = mistral.chat.completions.create.bind(
+      mistral.chat.completions
     );
 
-    // Call OpenAI with Structured Outputs for validated response
+    // Call Mistral with JSON mode for structured response
     const response = (await step.ai.wrap(
-      "generate-hashtags-with-gpt",
+      "generate-hashtags-with-mistral",
       createCompletion,
       {
-        model: "gpt-5-mini",
+        model: "mistral-large-latest",
         messages: [
           { role: "system", content: HASHTAGS_SYSTEM_PROMPT },
           { role: "user", content: buildHashtagsPrompt(transcript) },
         ],
-        response_format: zodResponseFormat(hashtagsSchema, "hashtags"),
+        response_format: { type: "json_object" },
       }
     )) as OpenAI.Chat.Completions.ChatCompletion;
 
@@ -140,7 +139,7 @@ export async function generateHashtags(
 
     return hashtags;
   } catch (error) {
-    console.error("GPT hashtags error:", error);
+    console.error("Mistral hashtags error:", error);
 
     // Graceful degradation: Return error indicators
     return {

@@ -23,14 +23,13 @@
  */
 import type { step as InngestStep } from "inngest";
 import type OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
-import { openai } from "../../lib/openai-client";
+import { mistral } from "../../lib/mistral-client";
 import { type SocialPosts, socialPostsSchema } from "../../schemas/ai-outputs";
 import type { TranscriptWithExtras } from "../../types/assemblyai";
 
-// System prompt establishes GPT's expertise in platform-specific marketing
+// System prompt establishes the model's expertise in platform-specific marketing
 const SOCIAL_SYSTEM_PROMPT =
-  "You are a viral social media marketing expert who understands each platform's unique audience, tone, and best practices. You create platform-optimized content that drives engagement and grows audiences.";
+  'You are a viral social media marketing expert who understands each platform\'s unique audience, tone, and best practices. You create platform-optimized content that drives engagement and grows audiences. You MUST respond with valid JSON only, matching this exact structure: {"twitter":"string (max 280 chars)","linkedin":"string","instagram":"string","tiktok":"string","youtube":"string","facebook":"string"}';
 
 /**
  * Builds prompt with episode context and platform-specific guidelines
@@ -125,25 +124,25 @@ export async function generateSocialPosts(
   step: typeof InngestStep,
   transcript: TranscriptWithExtras
 ): Promise<SocialPosts> {
-  console.log("Generating social posts with GPT-4");
+  console.log("Generating social posts with Mistral");
 
   try {
-    // Bind OpenAI method to preserve `this` context for step.ai.wrap
-    const createCompletion = openai.chat.completions.create.bind(
-      openai.chat.completions
+    // Bind method to preserve `this` context for step.ai.wrap
+    const createCompletion = mistral.chat.completions.create.bind(
+      mistral.chat.completions
     );
 
-    // Call OpenAI with Structured Outputs for type-safe, validated response
+    // Call Mistral with JSON mode for structured response
     const response = (await step.ai.wrap(
-      "generate-social-posts-with-gpt",
+      "generate-social-posts-with-mistral",
       createCompletion,
       {
-        model: "gpt-5-mini",
+        model: "mistral-large-latest",
         messages: [
           { role: "system", content: SOCIAL_SYSTEM_PROMPT },
           { role: "user", content: buildSocialPrompt(transcript) },
         ],
-        response_format: zodResponseFormat(socialPostsSchema, "social_posts"),
+        response_format: { type: "json_object" },
       }
     )) as OpenAI.Chat.Completions.ChatCompletion;
 
@@ -171,7 +170,7 @@ export async function generateSocialPosts(
 
     return socialPosts;
   } catch (error) {
-    console.error("GPT social posts error:", error);
+    console.error("Mistral social posts error:", error);
 
     // Graceful degradation: Return error messages but allow workflow to continue
     return {

@@ -27,7 +27,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { upload } from "@vercel/blob/client";
+import { useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -40,10 +40,12 @@ import { UploadDropzone } from "@/components/upload-dropzone";
 import { UploadProgress } from "@/components/upload-progress";
 import { estimateDurationFromSize, getAudioDuration } from "@/lib/audio-utils";
 import type { UploadStatus } from "@/lib/types";
+import { api } from "@/convex/_generated/api";
 
 export function PodcastUploader() {
   const router = useRouter();
   const { userId } = useAuth(); // Clerk authentication
+  const generateUploadUrl = useMutation(api.projects.generateUploadUrl);
 
   // Upload state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -110,21 +112,37 @@ export function PodcastUploader() {
         throw new Error(validation.error || "Validation failed");
       }
 
-      // Step 2: Upload file to Vercel Blob
-      const blob = await upload(selectedFile.name, selectedFile, {
-        access: "public",
-        handleUploadUrl: "/api/upload",
-        onUploadProgress: ({ percentage }) => {
-          setUploadProgress(percentage);
-        },
+      // Step 2: Get a short-lived upload URL from Convex
+      const uploadUrl = await generateUploadUrl();
+
+      // Step 3: Upload file directly to Convex storage with progress tracking
+      const storageId = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        });
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const { storageId } = JSON.parse(xhr.responseText);
+            resolve(storageId);
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        });
+        xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+        xhr.open("POST", uploadUrl);
+        xhr.setRequestHeader("Content-Type", selectedFile.type);
+        xhr.send(selectedFile);
       });
 
-      // Step 3: Create project and trigger workflow
+      // Step 4: Create project and trigger workflow
       setUploadStatus("processing");
       setUploadProgress(100);
 
       const { projectId } = await createProjectAction({
-        fileUrl: blob.url,
+        storageId,
         fileName: selectedFile.name,
         fileSize: selectedFile.size,
         mimeType: selectedFile.type,

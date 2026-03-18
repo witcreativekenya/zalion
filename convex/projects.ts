@@ -21,13 +21,26 @@ import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 
 /**
+ * Generates a short-lived upload URL for Convex File Storage
+ *
+ * Called by: Client component before uploading audio file
+ * The client uploads directly to this URL (POST with file as body)
+ * and receives a storageId in return.
+ */
+export const generateUploadUrl = mutation({
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/**
  * Creates a new project record after file upload
  *
- * Called by: Next.js server action after Vercel Blob upload succeeds
+ * Called by: Next.js server action after Convex storage upload succeeds
  *
  * Flow:
- * 1. User uploads file -> Vercel Blob
- * 2. Server action creates project in Convex
+ * 1. User uploads file -> Convex File Storage (via generateUploadUrl)
+ * 2. Server action creates project in Convex (resolves public URL from storageId)
  * 3. Server action triggers Inngest workflow
  * 4. Inngest updates this project as processing proceeds
  *
@@ -36,7 +49,7 @@ import { mutation, query } from "./_generated/server";
 export const createProject = mutation({
   args: {
     userId: v.string(),
-    inputUrl: v.string(),
+    storageId: v.id("_storage"),
     fileName: v.string(),
     fileSize: v.number(),
     fileDuration: v.optional(v.number()),
@@ -44,13 +57,18 @@ export const createProject = mutation({
     mimeType: v.string(),
   },
   handler: async (ctx, args) => {
+    // Resolve public URL from Convex storage
+    const inputUrl = await ctx.storage.getUrl(args.storageId);
+    if (!inputUrl) throw new Error("Failed to resolve storage URL");
+
     const now = Date.now();
 
     // Insert new project with initial "uploaded" status
     // Initialize jobStatus to "pending" so UI can track progress from the start
     const projectId = await ctx.db.insert("projects", {
       userId: args.userId,
-      inputUrl: args.inputUrl,
+      storageId: args.storageId,
+      inputUrl,
       fileName: args.fileName,
       fileSize: args.fileSize,
       fileDuration: args.fileDuration,
@@ -65,7 +83,7 @@ export const createProject = mutation({
       updatedAt: now,
     });
 
-    return projectId;
+    return { projectId, inputUrl };
   },
 });
 
@@ -512,8 +530,12 @@ export const deleteProject = mutation({
       updatedAt: Date.now(),
     });
 
-    // Return inputUrl so server action can delete from Blob storage
-    return { inputUrl: project.inputUrl };
+    // Delete the file from Convex storage
+    if (project.storageId) {
+      await ctx.storage.delete(project.storageId);
+    }
+
+    return { success: true };
   },
 });
 

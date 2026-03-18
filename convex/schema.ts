@@ -22,8 +22,9 @@ export default defineSchema({
     // Soft delete timestamp - allows FREE tier to count all projects ever created
     deletedAt: v.optional(v.number()),
 
-    // Input file metadata - stored in Vercel Blob
-    inputUrl: v.string(), // Vercel Blob URL (public access)
+    // Input file metadata - stored in Convex File Storage
+    storageId: v.optional(v.id("_storage")), // Convex storage ID for file management
+    inputUrl: v.string(), // Convex storage public URL
     fileName: v.string(), // Original filename for display
     displayName: v.optional(v.string()), // User-editable display name (defaults to fileName in UI)
     fileSize: v.number(), // Bytes - used for billing/limits

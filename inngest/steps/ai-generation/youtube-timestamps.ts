@@ -27,7 +27,7 @@
 import type { step as InngestStep } from "inngest";
 import type OpenAI from "openai";
 import { formatTimestamp } from "@/lib/format";
-import { openai } from "../../lib/openai-client";
+import { mistral } from "../../lib/mistral-client";
 import type { TranscriptWithExtras } from "../../types/assemblyai";
 
 type YouTubeTimestamp = {
@@ -130,17 +130,17 @@ Return ONLY valid JSON in this exact format:
 
 Remember: Create TITLES, not transcript excerpts!`;
 
-  // Bind OpenAI method to preserve `this` context for step.ai.wrap
-  const createCompletion = openai.chat.completions.create.bind(
-    openai.chat.completions
+  // Bind method to preserve `this` context for step.ai.wrap
+  const createCompletion = mistral.chat.completions.create.bind(
+    mistral.chat.completions
   );
 
-  // Call GPT to enhance chapter titles
+  // Call Mistral to enhance chapter titles
   const response = (await step.ai.wrap(
-    "generate-youtube-titles-with-gpt",
+    "generate-youtube-titles-with-mistral",
     createCompletion,
     {
-      model: "gpt-5-mini",
+      model: "mistral-large-latest",
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -184,13 +184,13 @@ Remember: Create TITLES, not transcript excerpts!`;
           content: prompt,
         },
       ],
-      max_completion_tokens: 1500, // Enough for 100 titles
+      max_tokens: 1500, // Enough for 100 titles
     }
   )) as OpenAI.Chat.Completions.ChatCompletion;
 
   const content = response.choices[0]?.message?.content || '{"titles":[]}';
 
-  console.log("Raw GPT response:", content.substring(0, 500));
+  console.log("Raw Mistral response:", content.substring(0, 500));
 
   // Parse GPT's JSON response
   let aiTitles: { index: number; title: string }[] = [];

@@ -19,14 +19,13 @@
  */
 import type { step as InngestStep } from "inngest";
 import type OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
-import { openai } from "../../lib/openai-client";
+import { mistral } from "../../lib/mistral-client";
 import { type Titles, titlesSchema } from "../../schemas/ai-outputs";
 import type { TranscriptWithExtras } from "../../types/assemblyai";
 
-// System prompt defines GPT's expertise in SEO and viral content
+// System prompt defines the model's expertise in SEO and viral content
 const TITLES_SYSTEM_PROMPT =
-  "You are an expert in SEO, content marketing, and viral content creation. You understand what makes titles clickable while maintaining credibility and search rankings.";
+  'You are an expert in SEO, content marketing, and viral content creation. You understand what makes titles clickable while maintaining credibility and search rankings. You MUST respond with valid JSON only, matching this exact structure: {"youtubeShort":["string","string","string"],"youtubeLong":["string","string","string"],"podcastTitles":["string","string","string"],"seoKeywords":["string"]}';
 
 /**
  * Builds prompt with transcript preview and title-specific guidelines
@@ -100,25 +99,25 @@ export async function generateTitles(
   step: typeof InngestStep,
   transcript: TranscriptWithExtras,
 ): Promise<Titles> {
-  console.log("Generating title suggestions with GPT-4");
+  console.log("Generating title suggestions with Mistral");
 
   try {
-    // Bind OpenAI method to preserve `this` context for step.ai.wrap
-    const createCompletion = openai.chat.completions.create.bind(
-      openai.chat.completions,
+    // Bind method to preserve `this` context for step.ai.wrap
+    const createCompletion = mistral.chat.completions.create.bind(
+      mistral.chat.completions,
     );
 
-    // Call OpenAI with Structured Outputs for validated response
+    // Call Mistral with JSON mode for structured response
     const response = (await step.ai.wrap(
-      "generate-titles-with-gpt",
+      "generate-titles-with-mistral",
       createCompletion,
       {
-        model: "gpt-5-mini",
+        model: "mistral-large-latest",
         messages: [
           { role: "system", content: TITLES_SYSTEM_PROMPT },
           { role: "user", content: buildTitlesPrompt(transcript) },
         ],
-        response_format: zodResponseFormat(titlesSchema, "titles"),
+        response_format: { type: "json_object" },
       },
     )) as OpenAI.Chat.Completions.ChatCompletion;
 
@@ -136,7 +135,7 @@ export async function generateTitles(
 
     return titles;
   } catch (error) {
-    console.error("GPT titles error:", error);
+    console.error("Mistral titles error:", error);
 
     // Graceful degradation: Return error indicators
     return {
