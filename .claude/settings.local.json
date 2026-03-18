@@ -4,7 +4,8 @@
       "Bash(npx convex:*)",
       "Bash(powershell.exe -Command \"cd 'E:\\\\webapp\\\\ai_podcast'; npx convex dev --once\" 2>&1)",
       "Bash(powershell.exe -Command \"cd 'E:\\\\webapp\\\\ai_podcast'; npx next build 2>&1 | Select-Object -Last 30\")",
-      "Bash(powershell.exe -Command \"cd 'E:\\\\webapp\\\\ai_podcast'; pnpm add -D @types/bytes 2>&1\")"
+      "Bash(powershell.exe -Command \"cd 'E:\\\\webapp\\\\ai_podcast'; pnpm add -D @types/bytes 2>&1\")",
+      "Bash(powershell.exe -Command \"cd 'E:\\\\webapp\\\\ai_podcast'; npx next build 2>&1 | Select-Object -Last 20\")"
     ]
   }
 }
